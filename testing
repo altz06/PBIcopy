@@ -1,0 +1,112 @@
+#>
+#2. Declare variables for export paths and date data was retrieved
+ 
+$RetrieveDate = Get-Date
+$BasePath = "C:\data\"
+cd \data
+ 
+#Set FileNum Here:
+#        |
+#        V
+$FILENUM=2
+ 
+ 
+#ExportPaths
+$DatasetsPath      = $BasePath + "Datasets$FILENUM.csv"
+$WorkspacesPath    = $BasePath + "Workspaces$FILENUM.csv"
+$ReportsPath       = $BasePath + "Reports$FILENUM.csv"
+$DashboardsPath    = $BasePath + "Dashboards$FILENUM.csv"
+$DatasourcesPath   = $BasePath + "DataSources$FILENUM.json"
+$DatasourcesPath2  = $BasePath + "DataSources$FILENUM.csv"
+$CapacitiesPath    = $BasePath + "Capacities.json"
+ 
+$CapacityPRD01WorkloadPath = $BasePath + "CapacityPRD01Workloads.json"
+$CapacityPRD02WorkloadPath = $BasePath + "CapacityPRD02Workloads.json"
+$CapacityPRD03WorkloadPath = $BasePath + "CapacityPRD03Workloads.json"
+$CapacityUAT01WorkloadPath = $BasePath + "CapacityUAT01Workloads.json"
+$CapacityEWorkloadPath = $BasePath + "CapacityEWorkloads.json"
+$CapacityFWorkloadPath = $BasePath + "CapacityFWorkloads.json"
+ 
+#3. Export Power BI Premium capacities and capacity workloads
+ 
+#Premium Capacity ID variables
+$CapacityPRD01 = "A979E2EB-4370-4532-8C58-9D5DE58CEE46"
+$CapacityPRD02 = "7E4B05DB-8908-43AF-B52A-82A8F5352BB5"
+$CapacityPRD03 = "5D049880-1436-4543-9FDD-4FA8E2BF424B"
+$CapacityUAT01 = "DEDC8FE1-2574-4624-B38C-40A9A1EE9B98"
+ 
+#4 Premium Capacity Workload URL variables
+$CapacityPRD01URL = 'capacities/' + $CapacityPRD01 + '/Workloads'
+$CapacityPRD02URL = 'capacities/' + $CapacityPRD02 + '/Workloads'
+$CapacityPRD03URL = 'capacities/' + $CapacityPRD03 + '/Workloads'
+$CapacityUAT01URL = 'capacities/' + $CapacityUAT01 + '/Workloads'
+ 
+Write-Output "PROD02 Extract Start"
+date
+ 
+ 
+ 
+###########################################################################################################################
+#6.  Custom Exports
+###########################################################################################################################
+# ----------
+# Workspaces
+# ----------                                                                Set Capacity Here |||||
+# By Capacity                                                                                 VVVVV
+# ----------
+Write-Output "Workspace Start"
+date
+$W=Get-PowerBIworkspace -Scope Organization -All | Where-Object{($_."CapacityId" -eq $CapacityPRD02)}
+#######$W=Get-PowerBIworkspace -Scope Organization -All | Where-Object{($_."Name" -eq "PBI-PRD-GSM-GSV")}
+$W | Export-Csv  -NoTypeInformation -Path $WorkspacesPath
+Write-Output "Workspace END"
+date
+$W.Count
+Write-Output " "
+ 
+Start-Sleep -Seconds 60
+ 
+# ----------
+# Datasets
+# ----------
+Write-Output "Dataset Start"
+date
+$D=$W | Foreach {$datasID = $_.Id; Get-PowerBIDataset -WorkspaceID $datasID -Scope Organization} | `
+Select *, @{Name = "DatasetID"; Expression={$dsID}}, @{Name = "WorkspaceID"; Expression={$datasID}},@{Name = "Date Retrieved"; Expression={$RetrieveDate}} `
+ 
+$D | Export-Csv  -NoTypeInformation -Path $DatasetsPath
+Write-Output "Dataset End"
+date
+$D.Count
+Write-Output " "
+ 
+Start-Sleep -Seconds 240
+ 
+# ----------
+# Datasets to Data Source Bridge
+# ----------
+Write-Output "Datasets to Data Source Bridge Start"
+date
+$DSB=$D | Foreach {$dsID = $_.Id; Get-PowerBIDatasource -DatasetId $dsID -Scope Organization} | `
+Select *, @{Name = "DatasetID"; Expression={$dsID}}, @{Name = "Date Retrieved"; Expression={$RetrieveDate}}`
+ 
+$DSB | Export-Csv  -NoTypeInformation -Path $DatasourcesPath2
+Write-Output "Datasets to Data Source Bridge End"
+date
+$DSB.Count
+Write-Output " "
+ 
+Start-Sleep -Seconds 360
+ 
+# ----------
+# Data Source
+# Convert to UTF8 before loading to Snowflake
+# ----------
+Write-Output "Data Source Start"
+date
+$DS=$D | Foreach {$datasID2 = 'admin/datasets/' + $_.Id + '/datasources'; Invoke-PowerBIRestMethod -Url $datasID2 -Method Get}
+ 
+$DS   | Out-File -Encoding utf8 $DatasourcesPath
+date
+$DS.Count
+Write-Output "Data Source End"
